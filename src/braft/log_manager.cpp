@@ -1,11 +1,11 @@
 // Copyright (c) 2015 Baidu.com, Inc. All Rights Reserved
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -85,7 +85,7 @@ int LogManager::init(const LogManagerOptions &options) {
         return ENOMEM;
     }
     _log_storage = options.log_storage;
-    _config_manager = options.configuration_manager;
+    _config_manager = options.configuration_manager;  // 传入的 configuration_manager
     int ret = _log_storage->init(_config_manager);
     if (ret != 0) {
         return ret;
@@ -129,7 +129,7 @@ void LogManager::clear_memory_logs(const LogId& id) {
         nentries = 0;
         {
             BAIDU_SCOPED_LOCK(_mutex);
-            while (!_logs_in_memory.empty() 
+            while (!_logs_in_memory.empty()
                     && nentries < ARRAY_SIZE(entries_to_clear)) {
                 LogEntry* entry = _logs_in_memory.front();
                 if (entry->id > id) {
@@ -333,9 +333,9 @@ void LogManager::unsafe_truncate_suffix(const int64_t last_index_kept) {
 
 int LogManager::check_and_resolve_conflict(
             std::vector<LogEntry*> *entries, StableClosure* done) {
-    AsyncClosureGuard done_guard(done);   
+    AsyncClosureGuard done_guard(done);
     if (entries->front()->id.index == 0) {
-        // Node is currently the leader and |entries| are from the user who 
+        // Node is currently the leader and |entries| are from the user who
         // don't know the correct indexes the logs should assign to. So we have
         // to assign indexes to the appending entries
         for (size_t i = 0; i < entries->size(); ++i) {
@@ -344,7 +344,7 @@ int LogManager::check_and_resolve_conflict(
         done_guard.release();
         return 0;
     } else {
-        // Node is currently a follower and |entries| are from the leader. We 
+        // Node is currently a follower and |entries| are from the leader. We
         // should check and resolve the confliction between the local logs and
         // |entries|
         if (entries->front()->id.index > _last_log_index + 1) {
@@ -384,16 +384,16 @@ int LogManager::check_and_resolve_conflict(
                             (*entries)[conflicting_index]->id.index - 1);
                 }
                 _last_log_index = entries->back()->id.index;
-            }  // else this is a duplicated AppendEntriesRequest, we have 
+            }  // else this is a duplicated AppendEntriesRequest, we have
                // nothing to do besides releasing all the entries
-            
+
             // Release all the entries before the conflicting_index and the rest
             // would be append to _logs_in_memory and _log_storage after this
             // function returns
             for (size_t i = 0; i < conflicting_index; ++i) {
                 (*entries)[i]->Release();
             }
-            entries->erase(entries->begin(), 
+            entries->erase(entries->begin(),
                            entries->begin() + conflicting_index);
         }
         done_guard.release();
@@ -416,6 +416,7 @@ void LogManager::append_entries(
         return run_closure_in_bthread(done);
     }
     std::unique_lock<raft_mutex_t> lck(_mutex);
+    // check_and_resolve_conflict 会给每一个 LogEntry 分配 index
     if (!entries->empty() && check_and_resolve_conflict(entries, done) != 0) {
         lck.unlock();
         // release entries
@@ -446,7 +447,7 @@ void LogManager::append_entries(
     wakeup_all_waiter(lck);
 }
 
-void LogManager::append_to_storage(std::vector<LogEntry*>* to_append, 
+void LogManager::append_to_storage(std::vector<LogEntry*>* to_append,
                                    LogId* last_id, IOMetric* metric) {
     if (!_has_error.load(butil::memory_order_relaxed)) {
         size_t written_size = 0;
@@ -462,11 +463,11 @@ void LogManager::append_to_storage(std::vector<LogEntry*>* to_append,
         if (nappent != (int)to_append->size()) {
             // FIXME
             LOG(ERROR) << "Fail to append_entries, "
-                       << "nappent=" << nappent 
+                       << "nappent=" << nappent
                        << ", to_append=" << to_append->size();
             report_error(EIO, "Fail to append entries");
         }
-        if (nappent > 0) { 
+        if (nappent > 0) {
             *last_id = (*to_append)[nappent - 1]->id;
         }
         g_storage_append_entries_latency << timer.u_elapsed();
@@ -480,12 +481,12 @@ void LogManager::append_to_storage(std::vector<LogEntry*>* to_append,
     to_append->clear();
 }
 
-DEFINE_int32(raft_max_append_buffer_size, 256 * 1024, 
+DEFINE_int32(raft_max_append_buffer_size, 256 * 1024,
              "Flush buffer to LogStorage if the buffer size reaches the limit");
 
 class AppendBatcher {
 public:
-    AppendBatcher(LogManager::StableClosure* storage[], size_t cap, LogId* last_id, 
+    AppendBatcher(LogManager::StableClosure* storage[], size_t cap, LogId* last_id,
                  LogManager* lm)
         : _storage(storage)
         , _cap(cap)
@@ -518,12 +519,12 @@ public:
         _buffer_size = 0;
     }
     void append(LogManager::StableClosure* done) {
-        if (_size == _cap || 
+        if (_size == _cap ||
                 _buffer_size >= (size_t)FLAGS_raft_max_append_buffer_size) {
             flush();
         }
         _storage[_size++] = done;
-        _to_append.insert(_to_append.end(), 
+        _to_append.insert(_to_append.end(),
                          done->_entries.begin(), done->_entries.end());
         for (size_t i = 0; i < done->_entries.size(); ++i) {
             _buffer_size += done->_entries[i]->data.length();
@@ -551,12 +552,12 @@ int LogManager::disk_thread(void* meta,
     LogId last_id = log_manager->_disk_id;
     StableClosure* storage[256];
     AppendBatcher ab(storage, ARRAY_SIZE(storage), &last_id, log_manager);
-    
+
     for (; iter; ++iter) {
                 // ^^^ Must iterate to the end to release to corresponding
                 //     even if some error has occurred
         StableClosure* done = *iter;
-        done->metric.bthread_queue_time_us = butil::cpuwide_time_us() - 
+        done->metric.bthread_queue_time_us = butil::cpuwide_time_us() -
                                             done->metric.start_time_us;
         if (!done->_entries.empty()) {
             ab.append(done);
@@ -573,7 +574,7 @@ int LogManager::disk_thread(void* meta,
                     llic->set_last_log_id(last_id);
                     break;
                 }
-                TruncatePrefixClosure* tpc = 
+                TruncatePrefixClosure* tpc =
                         dynamic_cast<TruncatePrefixClosure*>(done);
                 if (tpc) {
                     BRAFT_VLOG << "Truncating storage to first_index_kept="
@@ -582,7 +583,7 @@ int LogManager::disk_thread(void* meta,
                                     tpc->first_index_kept());
                     break;
                 }
-                TruncateSuffixClosure* tsc = 
+                TruncateSuffixClosure* tsc =
                         dynamic_cast<TruncateSuffixClosure*>(done);
                 if (tsc) {
                     LOG(WARNING) << "Truncating storage to last_index_kept="
@@ -645,21 +646,23 @@ void LogManager::set_snapshot(const SnapshotMeta* meta) {
     const LogId last_but_one_snapshot_id = _last_snapshot_id;
     _last_snapshot_id.index = meta->last_included_index();
     _last_snapshot_id.term = meta->last_included_term();
-    if (_last_snapshot_id > _applied_id) {
+    if (_last_snapshot_id > _applied_id) {  // 从 leader 下载 snapshot 可能会出现
         _applied_id = _last_snapshot_id;
     }
     // NOTICE: not to update disk_id here as we are not sure if this node really
     // has these logs on disk storage. Just leave disk_id as it was, which can keep
-    // these logs in memory all the time until they are flushed to disk. By this 
+    // these logs in memory all the time until they are flushed to disk. By this
     // way we can avoid some corner cases which failed to get logs.
-    
+
+    // last_included_index > last_index
+    // 快照包含的日志长度比当前节点日志长度大，这种情况只可能发生在从 leader 下载过来的 snapshot
     if (term == 0) {
         // last_included_index is larger than last_index
         // FIXME: what if last_included_index is less than first_index?
         _virtual_first_log_id = _last_snapshot_id;
         truncate_prefix(meta->last_included_index() + 1, lck);
         return;
-    } else if (term == meta->last_included_term()) {
+    } else if (term == meta->last_included_term()) {  // last_index >= last_included_index
         // Truncating log to the index of the last snapshot.
         // We don't truncate log before the latest snapshot immediately since
         // some log around last_snapshot_index is probably needed by some
@@ -834,7 +837,7 @@ void* LogManager::run_on_new_log(void *arg) {
 }
 
 LogManager::WaitId LogManager::wait(
-        int64_t expected_last_log_index, 
+        int64_t expected_last_log_index,
         int (*on_new_log)(void *arg, int error_code), void *arg) {
     WaitMeta* wm = butil::get_object<WaitMeta>();
     if (BAIDU_UNLIKELY(wm == NULL)) {
@@ -886,7 +889,7 @@ int LogManager::remove_waiter(WaitId id) {
 }
 
 void LogManager::wakeup_all_waiter(std::unique_lock<raft_mutex_t>& lck) {
-    if (_wait_map.empty()) {
+    if (_wait_map.empty()) {  // follower 这里应该为空？
         return;
     }
     WaitMeta* wm[_wait_map.size()];
@@ -948,7 +951,7 @@ butil::Status LogManager::check_consistency() {
     BAIDU_SCOPED_LOCK(_mutex);
     CHECK_GT(_first_log_index, 0);
     CHECK_GE(_last_log_index, 0);
-    if (_last_snapshot_id == LogId(0, 0)) {
+    if (_last_snapshot_id == LogId(0, 0)) {  // 没有快照
         if (_first_log_index == 1) {
             return butil::Status::OK();
         }

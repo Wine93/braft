@@ -1,11 +1,11 @@
 // Copyright (c) 2019 Baidu.com, Inc. All Rights Reserved
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -104,6 +104,7 @@ void FollowerLease::renew(const PeerId& leader_id) {
     _last_leader_timestamp = butil::monotonic_time_ms();
 }
 
+// 上一次收到 leader 的心跳时间
 int64_t FollowerLease::last_leader_timestamp() {
     return _last_leader_timestamp;
 }
@@ -113,6 +114,7 @@ int64_t FollowerLease::votable_time_from_now() {
         return 0;
     }
 
+    // votable_timestamp: 超过这个时间点可以进行投票
     int64_t now = butil::monotonic_time_ms();
     int64_t votable_timestamp = _last_leader_timestamp + _election_timeout_ms +
                                 _max_clock_drift_ms;
@@ -126,6 +128,7 @@ const PeerId& FollowerLease::last_leader() {
     return _last_leader;
 }
 
+// 如果返回 true 代表可以进行投票
 bool FollowerLease::expired() {
     return butil::monotonic_time_ms() - _last_leader_timestamp
                 >= _election_timeout_ms + _max_clock_drift_ms;

@@ -119,7 +119,7 @@ TEST_F(LogStorageTest, open_segment) {
 
         char data_buf[128];
         snprintf(data_buf, sizeof(data_buf), "HELLO, WORLD: %d", i + 6);
-        entry->data.append(data_buf); 
+        entry->data.append(data_buf);
 
         ASSERT_EQ(0, seg1->append(entry));
 
@@ -437,7 +437,7 @@ TEST_F(LogStorageTest, append_close_load_append) {
     delete storage;
     delete configuration_manager;
 
-    // reinit 
+    // reinit
     storage = new braft::SegmentLogStorage("./data");
     configuration_manager = new braft::ConfigurationManager;
     ASSERT_EQ(0, storage->init(configuration_manager));
@@ -516,6 +516,8 @@ int append_corrupted_data(const char* filename) {
   return ret;
 }
 
+// 丢失最后一个 open 的 segment，storage 可以正常启动
+// 如果丢失的是已经关闭的 segment，则 storage 无法正常启动，why?
 TEST_F(LogStorageTest, data_lost) {
     ::system("rm -rf data");
     braft::LogStorage* storage = new braft::SegmentLogStorage("./data");
@@ -523,6 +525,7 @@ TEST_F(LogStorageTest, data_lost) {
     ASSERT_EQ(0, storage->init(configuration_manager));
 
     // append entry
+    // 一共增加 500000 条日志，index 为 [1, 50000]
     for (int i = 0; i < 100000; i++) {
         std::vector<braft::LogEntry*> entries;
         for (int j = 0; j < 5; j++) {
@@ -538,6 +541,7 @@ TEST_F(LogStorageTest, data_lost) {
             entries.push_back(entry);
         }
 
+        // 每次 append 5 条日志
         ASSERT_EQ(5, storage->append_entries(entries, NULL));
 
         for (size_t j = 0; j < entries.size(); j++) {
@@ -548,11 +552,12 @@ TEST_F(LogStorageTest, data_lost) {
     delete storage;
     delete configuration_manager;
 
-    // reinit 
+    // reinit
     storage = new braft::SegmentLogStorage("./data");
     configuration_manager = new braft::ConfigurationManager;
     ASSERT_EQ(0, storage->init(configuration_manager));
 
+    // 判断日志 index 属于 [1, 500000]
     ASSERT_EQ(storage->first_log_index(), 1);
     ASSERT_EQ(storage->last_log_index(), 100000*5);
 
@@ -564,7 +569,7 @@ TEST_F(LogStorageTest, data_lost) {
     ASSERT_TRUE(dir_reader1.IsValid());
     while (dir_reader1.Next()) {
         int64_t first_index = 0;
-        int match = sscanf(dir_reader1.name(), "log_inprogress_%020ld", 
+        int match = sscanf(dir_reader1.name(), "log_inprogress_%020ld",
                            &first_index);
         std::string path;
         butil::string_appendf(&path, "./data/%s", dir_reader1.name());
@@ -589,7 +594,7 @@ TEST_F(LogStorageTest, data_lost) {
     while (dir_reader2.Next()) {
         int64_t first_index = 0;
         int64_t last_index = 0;
-        int match = sscanf(dir_reader2.name(), "log_%020ld_%020ld", 
+        int match = sscanf(dir_reader2.name(), "log_%020ld_%020ld",
                            &first_index, &last_index);
         std::string path;
         butil::string_appendf(&path, "./data/%s", dir_reader2.name());
@@ -646,7 +651,7 @@ TEST_F(LogStorageTest, full_segment_has_garbage) {
         dir_reader.Next();
         int64_t first_index = 0;
         int64_t last_index = 0;
-        int match = sscanf(dir_reader.name(), "log_%020ld_%020ld", 
+        int match = sscanf(dir_reader.name(), "log_%020ld_%020ld",
                            &first_index, &last_index);
         if (match != 2) {
             continue;
@@ -724,8 +729,8 @@ TEST_F(LogStorageTest, append_read_badcase) {
     delete configuration_manager;
 
     // make file unwrite
-    butil::FileEnumerator dir1(butil::FilePath("./data"), false, 
-                              butil::FileEnumerator::FILES 
+    butil::FileEnumerator dir1(butil::FilePath("./data"), false,
+                              butil::FileEnumerator::FILES
                               | butil::FileEnumerator::DIRECTORIES);
     for (butil::FilePath sub_path = dir1.Next(); !sub_path.empty(); sub_path = dir1.Next()) {
         butil::File::Info info;
@@ -742,8 +747,8 @@ TEST_F(LogStorageTest, append_read_badcase) {
     delete storage;
     delete configuration_manager;
 
-    butil::FileEnumerator dir2(butil::FilePath("./data"), false, 
-                              butil::FileEnumerator::FILES 
+    butil::FileEnumerator dir2(butil::FilePath("./data"), false,
+                              butil::FileEnumerator::FILES
                               | butil::FileEnumerator::DIRECTORIES);
     for (butil::FilePath sub_path = dir2.Next(); !sub_path.empty(); sub_path = dir2.Next()) {
         butil::File::Info info;
@@ -759,8 +764,8 @@ TEST_F(LogStorageTest, append_read_badcase) {
     ASSERT_EQ(0, storage->init(configuration_manager));
 
     // make file chaos
-    butil::FileEnumerator dir3(butil::FilePath("./data"), false, 
-                              butil::FileEnumerator::FILES 
+    butil::FileEnumerator dir3(butil::FilePath("./data"), false,
+                              butil::FileEnumerator::FILES
                               | butil::FileEnumerator::DIRECTORIES);
     for (butil::FilePath sub_path = dir3.Next(); !sub_path.empty(); sub_path = dir3.Next()) {
         butil::File::Info info;
@@ -881,7 +886,7 @@ TEST_F(LogStorageTest, configuration) {
     delete storage2;
 }
 
-butil::atomic<int> g_first_read_index(0); 
+butil::atomic<int> g_first_read_index(0);
 butil::atomic<int> g_last_read_index(0);
 bool g_stop = false;
 
@@ -899,7 +904,7 @@ void* read_thread_routine(void* arg) {
             EXPECT_EQ(expect, entry->data.to_string());
             entry->Release();
         } else {
-            EXPECT_LT(index, storage->first_log_index()) 
+            EXPECT_LT(index, storage->first_log_index())
                     << "first_read_index=" << g_first_read_index.load()
                     << " last_read_index=" << g_last_read_index.load()
                     << " a=" << a << " b=" << b;
@@ -912,18 +917,18 @@ void* read_thread_routine(void* arg) {
 
 void* write_thread_routine(void* arg) {
     braft::SegmentLogStorage* storage = (braft::SegmentLogStorage*)arg;
-    // Write operation distribution: 
+    // Write operation distribution:
     //  - 10% truncate_prefix
     //  - 10% truncate_suffix,
     //  - 30% increase last_read_index (which stands for commitment in the real
-    // world), 
+    // world),
     //  - 50% append new entry
     int next_log_index = storage->last_log_index() + 1;
     while (!g_stop) {
         const int r = butil::fast_rand_in(0, 9);
         if (r < 1) {  // truncate_prefix
             int truncate_index = butil::fast_rand_in(
-                    g_first_read_index.load(butil::memory_order_relaxed), 
+                    g_first_read_index.load(butil::memory_order_relaxed),
                     g_last_read_index.load(butil::memory_order_relaxed));
             EXPECT_EQ(0, storage->truncate_prefix(truncate_index));
             g_first_read_index.store(truncate_index, butil::memory_order_relaxed);
@@ -981,7 +986,7 @@ TEST_F(LogStorageTest, multi_read_single_modify_thread_safe) {
     g_last_read_index.store(N);
     bthread_t read_thread[8];
     for (size_t i = 0; i < ARRAY_SIZE(read_thread); ++i) {
-        ASSERT_EQ(0, bthread_start_urgent(&read_thread[i], NULL, 
+        ASSERT_EQ(0, bthread_start_urgent(&read_thread[i], NULL,
                                    read_thread_routine, storage));
     }
     bthread_t write_thread;
@@ -1029,16 +1034,16 @@ TEST_F(LogStorageTest, large_entry) {
     ASSERT_EQ(data, entry->data.to_string());
     entry->Release();
 
-    ASSERT_EQ(1, storage->_first_log_index); 
+    ASSERT_EQ(1, storage->_first_log_index);
     ASSERT_EQ(1, storage->_last_log_index);
     ASSERT_EQ(0, storage->_segments.size());
-    scoped_refptr<braft::Segment> segment = storage->open_segment(); 
+    scoped_refptr<braft::Segment> segment = storage->open_segment();
     ASSERT_EQ(1, storage->_segments.size());
 
     braft::SegmentLogStorage* storage2 = new braft::SegmentLogStorage("./data");
     braft::ConfigurationManager* configuration_manager2 = new braft::ConfigurationManager;
     ASSERT_EQ(0, storage2->init(configuration_manager2));
-    ASSERT_EQ(1, storage2->_first_log_index); 
+    ASSERT_EQ(1, storage2->_first_log_index);
     ASSERT_EQ(1, storage2->_last_log_index);
     ASSERT_EQ(1, storage2->_segments.size());
 }
@@ -1095,7 +1100,7 @@ TEST_F(LogStorageTest, reboot_with_checksum_type_changed) {
         ASSERT_EQ(data_buf, entry->data.to_string());
         entry->Release();
     }
-    
+
     delete storage;
 }
 
@@ -1136,7 +1141,7 @@ TEST_F(LogStorageTest, joint_configuration) {
         }
         ASSERT_TRUE(conf.equals(*entry->peers))
             << conf << " xxxx " << braft::Configuration(*entry->peers);
-                    
+
         ASSERT_TRUE(old_conf.equals(*entry->old_peers));
         entry->Release();
     }
@@ -1160,7 +1165,7 @@ TEST_F(LogStorageTest, joint_configuration) {
         }
         ASSERT_TRUE(conf.equals(*entry->peers))
             << conf << " xxxx " << braft::Configuration(*entry->peers);
-                    
+
         ASSERT_TRUE(old_conf.equals(*entry->old_peers));
         entry->Release();
     }
@@ -1242,7 +1247,7 @@ TEST_F(LogStorageTest, append_close_load_append_with_io_metric) {
     delete storage;
     delete configuration_manager;
 
-    // reinit 
+    // reinit
     storage = new braft::SegmentLogStorage("./data");
     configuration_manager = new braft::ConfigurationManager;
     ASSERT_EQ(0, storage->init(configuration_manager));
@@ -1327,7 +1332,7 @@ TEST_F(LogStorageTest, data_corrupt) {
     delete storage;
     delete configuration_manager;
 
-    // reinit 
+    // reinit
     storage = new braft::SegmentLogStorage("./data");
     configuration_manager = new braft::ConfigurationManager;
     ASSERT_EQ(0, storage->init(configuration_manager));
@@ -1343,7 +1348,7 @@ TEST_F(LogStorageTest, data_corrupt) {
     ASSERT_TRUE(dir_reader1.IsValid());
     while (dir_reader1.Next()) {
         int64_t first_index = 0;
-        int match = sscanf(dir_reader1.name(), "log_inprogress_%020ld", 
+        int match = sscanf(dir_reader1.name(), "log_inprogress_%020ld",
                            &first_index);
         std::string path;
         butil::string_appendf(&path, "./data/%s", dir_reader1.name());

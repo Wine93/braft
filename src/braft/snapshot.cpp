@@ -1,11 +1,11 @@
 // Copyright (c) 2015 Baidu.com, Inc. All Rights Reserved
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -40,7 +40,7 @@ LocalSnapshotMetaTable::LocalSnapshotMetaTable() {}
 
 LocalSnapshotMetaTable::~LocalSnapshotMetaTable() {}
 
-int LocalSnapshotMetaTable::add_file(const std::string& filename, 
+int LocalSnapshotMetaTable::add_file(const std::string& filename,
                                 const LocalFileMeta& meta) {
     Map::value_type value(filename, meta);
     std::pair<Map::iterator, bool> ret = _file_map.insert(value);
@@ -144,7 +144,7 @@ void LocalSnapshotMetaTable::list_files(std::vector<std::string>* files) const {
     }
 }
 
-int LocalSnapshotMetaTable::get_file_meta(const std::string& filename, 
+int LocalSnapshotMetaTable::get_file_meta(const std::string& filename,
                                           LocalFileMeta* file_meta) const {
     Map::const_iterator iter = _file_map.find(filename);
     if (iter == _file_map.end()) {
@@ -159,10 +159,10 @@ int LocalSnapshotMetaTable::get_file_meta(const std::string& filename,
 std::string LocalSnapshot::get_path() { return std::string(); }
 
 void LocalSnapshot::list_files(std::vector<std::string> *files) {
-    return _meta_table.list_files(files);
+    return _meta_table.list_files(files);  // _meta_table: LocalSnapshotMetaTable
 }
 
-int LocalSnapshot::get_file_meta(const std::string& filename, 
+int LocalSnapshot::get_file_meta(const std::string& filename,
                                        ::google::protobuf::Message* file_meta) {
     LocalFileMeta* meta = NULL;
     if (file_meta) {
@@ -190,14 +190,14 @@ int LocalSnapshotWriter::init() {
         return EIO;
     }
     std::string meta_path = _path + "/" BRAFT_SNAPSHOT_META_FILE;
-    if (_fs->path_exists(meta_path) && 
+    if (_fs->path_exists(meta_path) &&
                 _meta_table.load_from_file(_fs, meta_path) != 0) {
         LOG(ERROR) << "Fail to load meta from " << meta_path;
         set_error(EIO, "Fail to load metatable from %s", meta_path.c_str());
         return EIO;
     }
 
-    // remove file if meta_path not exist or it's not in _meta_table 
+    // remove file if meta_path not exist or it's not in _meta_table
     // to avoid dirty data
     {
         std::vector<std::string> to_remove;
@@ -212,7 +212,7 @@ int LocalSnapshotWriter::init() {
         while (dir_reader->next()) {
             std::string filename = dir_reader->name();
             if (filename != BRAFT_SNAPSHOT_META_FILE) {
-                if (get_file_meta(filename, NULL) != 0) {
+                if (get_file_meta(filename, NULL) != 0) {  // 如果该文件不存在元数据表中
                     to_remove.push_back(filename);
                 }
             }
@@ -238,7 +238,7 @@ int LocalSnapshotWriter::remove_file(const std::string& filename) {
 }
 
 int LocalSnapshotWriter::add_file(
-        const std::string& filename, 
+        const std::string& filename,
         const ::google::protobuf::Message* file_meta) {
     // TODO: normalize filename
     LocalFileMeta meta;
@@ -253,7 +253,7 @@ void LocalSnapshotWriter::list_files(std::vector<std::string> *files) {
     return _meta_table.list_files(files);
 }
 
-int LocalSnapshotWriter::get_file_meta(const std::string& filename, 
+int LocalSnapshotWriter::get_file_meta(const std::string& filename,
                                        ::google::protobuf::Message* file_meta) {
     LocalFileMeta* meta = NULL;
     if (file_meta) {
@@ -327,7 +327,7 @@ void LocalSnapshotReader::list_files(std::vector<std::string> *files) {
     return _meta_table.list_files(files);
 }
 
-int LocalSnapshotReader::get_file_meta(const std::string& filename, 
+int LocalSnapshotReader::get_file_meta(const std::string& filename,
                                        ::google::protobuf::Message* file_meta) {
     LocalFileMeta* meta = NULL;
     if (file_meta) {
@@ -400,7 +400,7 @@ public:
         return LocalDirReader::read_file_with_meta(
                 out, filename, &file_meta, offset, new_max_count, read_count, is_eof);
     }
-   
+
 private:
     LocalSnapshotMetaTable _meta_table;
     scoped_refptr<SnapshotThrottle> _snapshot_throttle;
@@ -494,7 +494,7 @@ int LocalSnapshotStorage::init() {
             snapshots.erase(index);
 
             std::string snapshot_path(_path);
-            butil::string_appendf(&snapshot_path, "/" BRAFT_SNAPSHOT_PATTERN, index);
+        butil::string_appendf(&snapshot_path, "/" BRAFT_SNAPSHOT_PATTERN, index);
             LOG(INFO) << "Deleting snapshot `" << snapshot_path << "'";
             // TODO: Notify Watcher before delete directories.
             if (!_fs->delete_file(snapshot_path, true)) {
@@ -548,7 +548,7 @@ SnapshotWriter* LocalSnapshotStorage::create(bool from_empty) {
     LocalSnapshotWriter* writer = NULL;
 
     do {
-        std::string snapshot_path(_path);
+        std::string snapshot_path(_path);  // ./data/temp
         snapshot_path.append("/");
         snapshot_path.append(_s_temp_path);
 
@@ -562,7 +562,7 @@ SnapshotWriter* LocalSnapshotStorage::create(bool from_empty) {
 
         writer = new LocalSnapshotWriter(snapshot_path, _fs.get());
         if (writer->init() != 0) {
-            LOG(ERROR) << "Fail to init writer in path " << snapshot_path 
+            LOG(ERROR) << "Fail to init writer in path " << snapshot_path
                        << ", " << *writer;
             delete writer;
             writer = NULL;
@@ -678,7 +678,7 @@ SnapshotReader* LocalSnapshotStorage::open() {
         lck.unlock();
         std::string snapshot_path(_path);
         butil::string_appendf(&snapshot_path, "/" BRAFT_SNAPSHOT_PATTERN, last_snapshot_index);
-        LocalSnapshotReader* reader = new LocalSnapshotReader(snapshot_path, _addr, 
+        LocalSnapshotReader* reader = new LocalSnapshotReader(snapshot_path, _addr,
                 _fs.get(), _snapshot_throttle.get());
         if (reader->init() != 0) {
             CHECK(!lck.owns_lock());
@@ -727,7 +727,7 @@ butil::Status LocalSnapshotStorage::gc_instance(const std::string& uri) const {
     butil::Status status;
     if (gc_dir(uri) != 0) {
         LOG(WARNING) << "Failed to gc snapshot storage from path " << _path;
-        status.set_error(EINVAL, "Failed to gc snapshot storage from path %s", 
+        status.set_error(EINVAL, "Failed to gc snapshot storage from path %s",
                          uri.c_str());
         return status;
     }
@@ -737,10 +737,10 @@ butil::Status LocalSnapshotStorage::gc_instance(const std::string& uri) const {
 
 // LocalSnapshotCopier
 
-LocalSnapshotCopier::LocalSnapshotCopier() 
+LocalSnapshotCopier::LocalSnapshotCopier()
     : LocalSnapshotCopier(true){}
 
-LocalSnapshotCopier::LocalSnapshotCopier(bool copy_file): 
+LocalSnapshotCopier::LocalSnapshotCopier(bool copy_file):
      _tid(INVALID_BTHREAD)
     , _cancelled(false)
     , _filter_before_copy_remote(false)
@@ -773,23 +773,23 @@ void LocalSnapshotCopier::copy() {
             break;
         }
         if (!_copy_file) {
-            break;            
+            break;
         }
         std::vector<std::string> files;
-        _remote_snapshot.list_files(&files);
+        _remote_snapshot.list_files(&files);  // _remote_snapshot: LocalSnapshot
         for (size_t i = 0; i < files.size() && ok(); ++i) {
             copy_file(files[i]);
         }
     } while (0);
     if (!ok() && _writer && _writer->ok()) {
         LOG(WARNING) << "Fail to copy, error_code " << error_code()
-                     << " error_msg " << error_cstr() 
+                     << " error_msg " << error_cstr()
                      << " writer path " << _writer->get_path();
         _writer->set_error(error_code(), error_cstr());
     }
     if (_writer) {
-        // set_error for copier only when failed to close writer and copier was 
-        // ok before this moment 
+        // set_error for copier only when failed to close writer and copier was
+        // ok before this moment
         if (_storage->close(_writer, _filter_before_copy_remote) != 0 && ok()) {
             set_error(EIO, "Fail to close writer");
         }
@@ -829,7 +829,7 @@ void LocalSnapshotCopier::load_meta_table() {
     CHECK(_remote_snapshot._meta_table.has_meta());
 }
 
-int LocalSnapshotCopier::filter_before_copy(LocalSnapshotWriter* writer, 
+int LocalSnapshotCopier::filter_before_copy(LocalSnapshotWriter* writer,
                                             SnapshotReader* last_snapshot) {
     std::vector<std::string> existing_files;
     writer->list_files(&existing_files);
@@ -838,7 +838,7 @@ int LocalSnapshotCopier::filter_before_copy(LocalSnapshotWriter* writer,
     for (size_t i = 0; i < existing_files.size(); ++i) {
         if (_remote_snapshot.get_file_meta(existing_files[i], NULL) != 0) {
             to_remove.push_back(existing_files[i]);
-            writer->remove_file(existing_files[i]);
+            writer->remove_file(existing_files[i]);  // 将文件名从元数据表中移除
         }
     }
 
@@ -928,7 +928,7 @@ void LocalSnapshotCopier::filter() {
         SnapshotReader* reader = _storage->open();
         if (filter_before_copy(_writer, reader) != 0) {
             LOG(WARNING) << "Fail to filter writer before copying"
-                            ", path: " << _writer->get_path() 
+                            ", path: " << _writer->get_path()
                          << ", destroy and create a new writer";
             _writer->set_error(-1, "Fail to filter");
             _storage->close(_writer, false);
@@ -971,7 +971,7 @@ void LocalSnapshotCopier::copy_file(const std::string& filename) {
         if (!rc) {
             LOG(ERROR) << "Fail to create directory for " << file_path
                        << " : " << butil::File::ErrorToString(e);
-            set_error(file_error_to_os_error(e), 
+            set_error(file_error_to_os_error(e),
                       "Fail to create directory");
         }
     }

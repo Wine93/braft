@@ -1,11 +1,11 @@
 // Copyright (c) 2015 Baidu.com, Inc. All Rights Reserved
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -42,13 +42,14 @@ int BallotBox::init(const BallotBoxOptions &options) {
         return EINVAL;
     }
     _waiter = options.waiter;
-    _closure_queue = options.closure_queue;
+    _closure_queue = options.closure_queue;  // _closure_queue 是与 FSMCaller 共用的
     return 0;
 }
 
+// 将 index 在 [fist_log_index, last_log_index] 之间的日志的投票数加一
 int BallotBox::commit_at(
         int64_t first_log_index, int64_t last_log_index, const PeerId& peer) {
-    // FIXME(chenzhangyi01): The cricital section is unacceptable because it 
+    // FIXME(chenzhangyi01): The cricital section is unacceptable because it
     // blocks all the other Replicators and LogManagers
     std::unique_lock<raft_mutex_t> lck(_mutex);
     if (_pending_index == 0) {
@@ -80,13 +81,13 @@ int BallotBox::commit_at(
     // peers, the quorum would decrease by 1, e.g. 3 of 4 changes to 2 of 3. In
     // this case, the log after removal may be committed before some previous
     // logs, since we use the new configuration to deal the quorum of the
-    // removal request, we think it's safe to commit all the uncommitted 
+    // removal request, we think it's safe to commit all the uncommitted
     // previous logs, which is not well proved right now
     // TODO: add vlog when committing previous logs
     for (int64_t index = _pending_index; index <= last_committed_index; ++index) {
         _pending_meta_queue.pop_front();
     }
-   
+
     _pending_index = last_committed_index + 1;
     _last_committed_index.store(last_committed_index, butil::memory_order_relaxed);
     lck.unlock();
@@ -106,10 +107,12 @@ int BallotBox::clear_pending_tasks() {
     return 0;
 }
 
+// 当一个节点成为 leader 时，需要调用 reset_pending_index() 来重置 _pending_index:
+//   _ballot_box->reset_pending_index(_log_manager->last_log_index() + 1);
 int BallotBox::reset_pending_index(int64_t new_pending_index) {
     BAIDU_SCOPED_LOCK(_mutex);
     CHECK(_pending_index == 0 && _pending_meta_queue.empty())
-        << "pending_index " << _pending_index << " pending_meta_queue " 
+        << "pending_index " << _pending_index << " pending_meta_queue "
         << _pending_meta_queue.size();
     CHECK_GT(new_pending_index, _last_committed_index.load(
                                     butil::memory_order_relaxed));
@@ -118,19 +121,20 @@ int BallotBox::reset_pending_index(int64_t new_pending_index) {
     return 0;
 }
 
+// 给任务绑定 Ballot 和 Closure
 int BallotBox::append_pending_task(const Configuration& conf, const Configuration* old_conf,
-                                   Closure* closure) {
+                                   Closure* closure) {  // closure: 用户提交 task 时的指定的 done
     Ballot bl;
-    if (bl.init(conf, old_conf) != 0) {
+    if (bl.init(conf, old_conf) != 0) {  // 初始化 Ballot 对象
         CHECK(false) << "Fail to init ballot";
         return -1;
     }
 
     BAIDU_SCOPED_LOCK(_mutex);
     CHECK(_pending_index > 0);
-    _pending_meta_queue.push_back(Ballot());
+    _pending_meta_queue.push_back(Ballot());  // 往队列尾插入以上初始化的 Ballot 对象
     _pending_meta_queue.back().swap(bl);
-    _closure_queue->append_pending_closure(closure);
+    _closure_queue->append_pending_closure(closure);  // 提交时会回调这个 closure
     return 0;
 }
 
@@ -143,7 +147,7 @@ int BallotBox::set_last_committed_index(int64_t last_committed_index) {
             << ", parameter last_committed_index=" << last_committed_index;
         return -1;
     }
-    if (last_committed_index < 
+    if (last_committed_index <
             _last_committed_index.load(butil::memory_order_relaxed)) {
         return EINVAL;
     }

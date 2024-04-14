@@ -1,11 +1,11 @@
 // Copyright (c) 2015 Baidu.com, Inc. All Rights Reserved
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -108,7 +108,7 @@ public:
     // Returns:
     //  success return last memory and logstorage index, empty return 0
     int64_t last_log_index(bool is_flush = false);
-    
+
     // Return the id the last log.
     LogId last_log_id(bool is_flush = false);
 
@@ -119,7 +119,7 @@ public:
     // false otherweise
     bool check_and_set_configuration(ConfigurationEntry* current);
 
-    // Wait until there are more logs since |last_log_index| and |on_new_log| 
+    // Wait until there are more logs since |last_log_index| and |on_new_log|
     // would be called after there are new logs or error occurs
     WaitId wait(int64_t expected_last_log_index,
                 int (*on_new_log)(void *arg, int error_code), void *arg);
@@ -129,8 +129,8 @@ public:
     //  - 0: success
     //  - -1: id is Invalid
     int remove_waiter(WaitId id);
-    
-    
+
+
     // Set the applied id, indicating that the log before applied_id (inclded)
     // can be droped from memory logs
     void set_applied_id(const LogId& applied_id);
@@ -139,7 +139,7 @@ public:
     // one of the following condition
     //   - Log starts from 1. OR
     //   - Log starts from a positive position and there must be a snapshot
-    //     of which the last_included_id is in the range 
+    //     of which the last_included_id is in the range
     //     [first_log_index-1, last_log_index]
     // Returns butil::Status::OK if valid, a specific error otherwise
     butil::Status check_consistency();
@@ -161,13 +161,13 @@ friend class AppendBatcher;
 
     static int disk_thread(void* meta,
                            bthread::TaskIterator<StableClosure*>& iter);
-    
+
     // delete logs from storage's head, [1, first_index_kept) will be discarded
     // Returns:
     //  success return 0, failed return -1
     int truncate_prefix(const int64_t first_index_kept,
                         std::unique_lock<raft_mutex_t>& lck);
-    
+
     int reset(const int64_t next_log_index,
               std::unique_lock<raft_mutex_t>& lck);
 
@@ -179,7 +179,7 @@ friend class AppendBatcher;
 
     WaitId notify_on_new_log(int64_t expected_last_log_index, WaitMeta* wm);
 
-    int check_and_resolve_conflict(std::vector<LogEntry*>* entries, 
+    int check_and_resolve_conflict(std::vector<LogEntry*>* entries,
                                    StableClosure* done);
 
     void unsafe_truncate_suffix(const int64_t last_index_kept);
@@ -218,7 +218,7 @@ friend class AppendBatcher;
     int64_t _last_log_index;
     // the last snapshot's log_id
     LogId _last_snapshot_id;
-    // the virtual first log, for finding next_index of replicator, which 
+    // the virtual first log, for finding next_index of replicator, which
     // can avoid install_snapshot too often in extreme case where a follower's
     // install_snapshot is slower than leader's save_snapshot
     // [NOTICE] there should not be hole between this log_id and _last_snapshot_id,

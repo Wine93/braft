@@ -1,11 +1,11 @@
 // Copyright (c) 2015 Baidu.com, Inc. All Rights Reserved
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -34,7 +34,7 @@ namespace braft {
 static bvar::CounterRecorder g_commit_tasks_batch_counter(
         "raft_commit_tasks_batch_counter");
 
-DEFINE_int32(raft_fsm_caller_commit_batch, 512, 
+DEFINE_int32(raft_fsm_caller_commit_batch, 512,
              "Max numbers of logs for the state machine to commit in a single batch");
 BRPC_VALIDATE_GFLAG(raft_fsm_caller_commit_batch, brpc::PositiveInteger);
 
@@ -155,7 +155,7 @@ bool FSMCaller::pass_by_status(Closure* done) {
 }
 
 int FSMCaller::init(const FSMCallerOptions &options) {
-    if (options.log_manager == NULL || options.fsm == NULL 
+    if (options.log_manager == NULL || options.fsm == NULL
             || options.closure_queue == NULL) {
         return EINVAL;
     }
@@ -170,9 +170,9 @@ int FSMCaller::init(const FSMCallerOptions &options) {
     if (_node) {
         _node->AddRef();
     }
-    
+
     bthread::ExecutionQueueOptions execq_opt;
-    execq_opt.bthread_attr = options.usercode_in_pthread 
+    execq_opt.bthread_attr = options.usercode_in_pthread
                              ? BTHREAD_ATTR_PTHREAD
                              : BTHREAD_ATTR_NORMAL;
     if (bthread::execution_queue_start(&_queue_id,
@@ -233,7 +233,7 @@ int FSMCaller::on_error(const Error& e) {
     ApplyTask t;
     t.type = ERROR;
     t.done = c;
-    if (bthread::execution_queue_execute(_queue_id, t, 
+    if (bthread::execution_queue_execute(_queue_id, t,
                                          &bthread::TASK_OPTIONS_URGENT) != 0) {
         c->Run();
         return -1;
@@ -300,7 +300,7 @@ void FSMCaller::do_committed(int64_t committed_index) {
         Iterator iter(&iter_impl);
         _fsm->on_apply(iter);
         LOG_IF(ERROR, iter.valid())
-                << "Node " << _node->node_id() 
+                << "Node " << _node->node_id()
                 << " Iterator is still valid, did you return before iterator "
                    " reached the end?";
         // Try move to next in case that we pass the same log twice.
@@ -337,12 +337,12 @@ void FSMCaller::do_snapshot_save(SaveSnapshotClosure* done) {
     _log_manager->get_configuration(last_applied_index, &conf_entry);
     for (Configuration::const_iterator
             iter = conf_entry.conf.begin();
-            iter != conf_entry.conf.end(); ++iter) { 
+            iter != conf_entry.conf.end(); ++iter) {
         *meta.add_peers() = iter->to_string();
     }
     for (Configuration::const_iterator
             iter = conf_entry.old_conf.begin();
-            iter != conf_entry.old_conf.end(); ++iter) { 
+            iter != conf_entry.old_conf.end(); ++iter) {
         *meta.add_old_peers() = iter->to_string();
     }
 
@@ -465,7 +465,7 @@ void FSMCaller::do_leader_start(const LeaderStartContext& leader_start_context) 
 int FSMCaller::on_start_following(const LeaderChangeContext& start_following_context) {
     ApplyTask task;
     task.type = START_FOLLOWING;
-    LeaderChangeContext* context  = new LeaderChangeContext(start_following_context.leader_id(), 
+    LeaderChangeContext* context  = new LeaderChangeContext(start_following_context.leader_id(),
             start_following_context.term(), start_following_context.status());
     task.leader_change_context = context;
     if (bthread::execution_queue_execute(_queue_id, task) != 0) {
@@ -478,7 +478,7 @@ int FSMCaller::on_start_following(const LeaderChangeContext& start_following_con
 int FSMCaller::on_stop_following(const LeaderChangeContext& stop_following_context) {
     ApplyTask task;
     task.type = STOP_FOLLOWING;
-    LeaderChangeContext* context = new LeaderChangeContext(stop_following_context.leader_id(), 
+    LeaderChangeContext* context = new LeaderChangeContext(stop_following_context.leader_id(),
             stop_following_context.term(), stop_following_context.status());
     task.leader_change_context = context;
     if (bthread::execution_queue_execute(_queue_id, task) != 0) {
@@ -551,9 +551,9 @@ void FSMCaller::join() {
 }
 
 IteratorImpl::IteratorImpl(StateMachine* sm, LogManager* lm,
-                          std::vector<Closure*> *closure, 
+                          std::vector<Closure*> *closure,
                           int64_t first_closure_index,
-                          int64_t last_applied_index, 
+                          int64_t last_applied_index,
                           int64_t committed_index,
                           butil::atomic<int64_t>* applying_index)
         : _sm(sm)
@@ -574,7 +574,7 @@ void IteratorImpl::next() {
     if (_cur_index <= _committed_index) {
         ++_cur_index;
         if (_cur_index <= _committed_index) {
-            _cur_entry = _lm->get_entry(_cur_index);
+            _cur_entry = _lm->get_entry(_cur_index);  // LogManager
             if (_cur_entry == NULL) {
                 _error.set_type(ERROR_TYPE_LOG);
                 _error.status().set_error(-1,
@@ -610,7 +610,7 @@ void IteratorImpl::set_error_and_rollback(
         _cur_entry = NULL;
     }
     _error.set_type(ERROR_TYPE_STATE_MACHINE);
-    _error.status().set_error(ESTATEMACHINE, 
+    _error.status().set_error(ESTATEMACHINE,
             "StateMachine meet critical error when applying one "
             " or more tasks since index=%" PRId64 ", %s", _cur_index,
             (st ? st->error_cstr() : "none"));

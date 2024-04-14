@@ -1,11 +1,11 @@
 // Copyright (c) 2015 Baidu.com, Inc. All Rights Reserved
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -25,7 +25,7 @@
 #include <butil/time.h>
 #include <butil/raw_pack.h>                          // butil::RawPacker
 #include <butil/fd_utility.h>                        // butil::make_close_on_exec
-#include <brpc/reloadable_flags.h>             // 
+#include <brpc/reloadable_flags.h>             //
 
 #include "braft/local_storage.pb.h"
 #include "braft/log_entry.h"
@@ -45,7 +45,7 @@ using ::butil::RawPacker;
 using ::butil::RawUnpacker;
 
 DECLARE_bool(raft_trace_append_entry_latency);
-DEFINE_int32(raft_max_segment_size, 8 * 1024 * 1024 /*8M*/, 
+DEFINE_int32(raft_max_segment_size, 8 * 1024 * 1024 /*8M*/,
              "Max size of one segment file");
 BRPC_VALIDATE_GFLAG(raft_max_segment_size, brpc::PositiveInteger);
 
@@ -69,7 +69,7 @@ int ftruncate_uninterrupted(int fd, off_t length) {
 
 enum CheckSumType {
     CHECKSUM_MURMURHASH32 = 0,
-    CHECKSUM_CRC32 = 1,   
+    CHECKSUM_CRC32 = 1,
 };
 
 enum RaftSyncPolicy {
@@ -103,7 +103,7 @@ std::ostream& operator<<(std::ostream& os, const Segment::EntryHeader& h) {
 
 int Segment::create() {
     if (!_is_open) {
-        CHECK(false) << "Create on a closed segment at first_index=" 
+        CHECK(false) << "Create on a closed segment at first_index="
                      << _first_index << " in " << _path;
         return -1;
     }
@@ -114,7 +114,7 @@ int Segment::create() {
     if (_fd >= 0) {
         butil::make_close_on_exec(_fd);
     }
-    LOG_IF(INFO, _fd >= 0) << "Created new segment `" << path 
+    LOG_IF(INFO, _fd >= 0) << "Created new segment `" << path
                            << "' with fd=" << _fd ;
     return _fd >= 0 ? 0 : -1;
 }
@@ -132,7 +132,7 @@ inline bool verify_checksum(int checksum_type,
     }
 }
 
-inline bool verify_checksum(int checksum_type, 
+inline bool verify_checksum(int checksum_type,
                             const butil::IOBuf& data, uint32_t value) {
     switch (checksum_type) {
     case CHECKSUM_MURMURHASH32:
@@ -197,7 +197,7 @@ int Segment::_load_entry(off_t offset, EntryHeader* head, butil::IOBuf* data,
     tmp.checksum_type = (meta_field << 8) >> 24;
     tmp.data_len = data_len;
     tmp.data_checksum = data_checksum;
-    if (!verify_checksum(tmp.checksum_type, 
+    if (!verify_checksum(tmp.checksum_type,
                         p, ENTRY_HEADER_SIZE - 4, header_checksum)) {
         LOG(ERROR) << "Found corrupted header at offset=" << offset
                    << ", header=" << tmp << ", path: " << _path;
@@ -219,7 +219,7 @@ int Segment::_load_entry(off_t offset, EntryHeader* head, butil::IOBuf* data,
         CHECK_EQ(buf.length(), ENTRY_HEADER_SIZE + data_len);
         buf.pop_front(ENTRY_HEADER_SIZE);
         if (!verify_checksum(tmp.checksum_type, buf, tmp.data_checksum)) {
-            LOG(ERROR) << "Found corrupted data at offset=" 
+            LOG(ERROR) << "Found corrupted data at offset="
                        << offset + ENTRY_HEADER_SIZE
                        << " header=" << tmp
                        << " path: " << _path;
@@ -233,7 +233,7 @@ int Segment::_load_entry(off_t offset, EntryHeader* head, butil::IOBuf* data,
 
 int Segment::_get_meta(int64_t index, LogMeta* meta) const {
     BAIDU_SCOPED_LOCK(_mutex);
-    if (index > _last_index.load(butil::memory_order_relaxed) 
+    if (index > _last_index.load(butil::memory_order_relaxed)
                     || index < _first_index) {
         // out of range
         BRAFT_VLOG << "_last_index=" << _last_index.load(butil::memory_order_relaxed)
@@ -252,7 +252,7 @@ int Segment::_get_meta(int64_t index, LogMeta* meta) const {
     DCHECK_LT(entry_cursor, next_cursor);
     meta->offset = entry_cursor;
     meta->term = _offset_and_term[meta_index].second;
-    meta->length = next_cursor - entry_cursor;
+    meta->length = next_cursor - entry_cursor;  // LogEntry 的长度，包括 Header 和 Data
     return 0;
 }
 
@@ -264,7 +264,7 @@ int Segment::load(ConfigurationManager* configuration_manager) {
     if (_is_open) {
         butil::string_appendf(&path, "/" BRAFT_SEGMENT_OPEN_PATTERN, _first_index);
     } else {
-        butil::string_appendf(&path, "/" BRAFT_SEGMENT_CLOSED_PATTERN, 
+        butil::string_appendf(&path, "/" BRAFT_SEGMENT_CLOSED_PATTERN,
                              _first_index, _last_index.load());
     }
     _fd = ::open(path.c_str(), O_RDWR);
@@ -285,7 +285,7 @@ int Segment::load(ConfigurationManager* configuration_manager) {
 
     // load entry index
     int64_t file_size = st_buf.st_size;
-    int64_t entry_off = 0;
+    int64_t entry_off = 0;  // 文件的 offset
     int64_t actual_last_index = _first_index - 1;
     bool is_entry_corrupted = false;
     for (int64_t i = _first_index; entry_off < file_size; i++) {
@@ -320,7 +320,7 @@ int Segment::load(ConfigurationManager* configuration_manager) {
             butil::Status status = parse_configuration_meta(data, entry);
             if (status.ok()) {
                 ConfigurationEntry conf_entry(*entry);
-                configuration_manager->add(conf_entry); 
+                configuration_manager->add(conf_entry);
             } else {
                 LOG(ERROR) << "fail to parse configuration meta, path: " << _path
                     << " entry_off " << entry_off;
@@ -380,7 +380,7 @@ int Segment::append(const LogEntry* entry) {
 
     if (BAIDU_UNLIKELY(!entry || !_is_open)) {
         return EINVAL;
-    } else if (entry->id.index != 
+    } else if (entry->id.index !=
                     _last_index.load(butil::memory_order_consume) + 1) {
         CHECK(false) << "entry->index=" << entry->id.index
                   << " _last_index=" << _last_index
@@ -395,13 +395,13 @@ int Segment::append(const LogEntry* entry) {
         break;
     case ENTRY_TYPE_NO_OP:
         break;
-    case ENTRY_TYPE_CONFIGURATION: 
+    case ENTRY_TYPE_CONFIGURATION:
         {
             butil::Status status = serialize_configuration_meta(entry, data);
             if (!status.ok()) {
-                LOG(ERROR) << "Fail to serialize ConfigurationPBMeta, path: " 
+                LOG(ERROR) << "Fail to serialize ConfigurationPBMeta, path: "
                            << _path;
-                return -1; 
+                return -1;
             }
         }
         break;
@@ -430,7 +430,7 @@ int Segment::append(const LogEntry* entry) {
         const ssize_t n = butil::IOBuf::cut_multiple_into_file_descriptor(
                 _fd, pieces + start, ARRAY_SIZE(pieces) - start);
         if (n < 0) {
-            LOG(ERROR) << "Fail to write to fd=" << _fd 
+            LOG(ERROR) << "Fail to write to fd=" << _fd
                        << ", path: " << _path << berror();
             return -1;
         }
@@ -479,7 +479,7 @@ LogEntry* Segment::get(const int64_t index) const {
         ConfigurationPBMeta configuration_meta;
         EntryHeader header;
         butil::IOBuf data;
-        if (_load_entry(meta.offset, &header, &data, 
+        if (_load_entry(meta.offset, &header, &data,
                         meta.length) != 0) {
             ok = false;
             break;
@@ -496,7 +496,7 @@ LogEntry* Segment::get(const int64_t index) const {
             break;
         case ENTRY_TYPE_CONFIGURATION:
             {
-                butil::Status status = parse_configuration_meta(data, entry); 
+                butil::Status status = parse_configuration_meta(data, entry);
                 if (!status.ok()) {
                     LOG(WARNING) << "Fail to parse ConfigurationPBMeta, path: "
                                  << _path;
@@ -510,7 +510,7 @@ LogEntry* Segment::get(const int64_t index) const {
             break;
         }
 
-        if (!ok) { 
+        if (!ok) {
             break;
         }
         entry->id.index = index;
@@ -535,19 +535,19 @@ int64_t Segment::get_term(const int64_t index) const {
 
 int Segment::close(bool will_sync) {
     CHECK(_is_open);
-    
+
     std::string old_path(_path);
     butil::string_appendf(&old_path, "/" BRAFT_SEGMENT_OPEN_PATTERN,
                          _first_index);
     std::string new_path(_path);
-    butil::string_appendf(&new_path, "/" BRAFT_SEGMENT_CLOSED_PATTERN, 
+    butil::string_appendf(&new_path, "/" BRAFT_SEGMENT_CLOSED_PATTERN,
                          _first_index, _last_index.load());
 
     // TODO: optimize index memory usage by reconstruct vector
-    LOG(INFO) << "close a full segment. Current first_index: " << _first_index 
-              << " last_index: " << _last_index 
-              << " raft_sync_segments: " << FLAGS_raft_sync_segments 
-              << " will_sync: " << will_sync 
+    LOG(INFO) << "close a full segment. Current first_index: " << _first_index
+              << " last_index: " << _last_index
+              << " raft_sync_segments: " << FLAGS_raft_sync_segments
+              << " will_sync: " << will_sync
               << " path: " << new_path;
     int ret = 0;
     if (_last_index > _first_index) {
@@ -681,9 +681,9 @@ int Segment::truncate(const int64_t last_index_kept) {
 
 int SegmentLogStorage::init(ConfigurationManager* configuration_manager) {
     if (FLAGS_raft_max_segment_size < 0) {
-        LOG(FATAL) << "FLAGS_raft_max_segment_size " << FLAGS_raft_max_segment_size  
+        LOG(FATAL) << "FLAGS_raft_max_segment_size " << FLAGS_raft_max_segment_size
                    << " must be greater than or equal to 0 ";
-        return -1; 
+        return -1;
     }
     butil::FilePath dir_path(_path);
     butil::File::Error e;
@@ -752,7 +752,7 @@ int SegmentLogStorage::append_entries(const std::vector<LogEntry*>& entries, IOM
     for (size_t i = 0; i < entries.size(); i++) {
         now = butil::cpuwide_time_us();
         LogEntry* entry = entries[i];
-        
+
         scoped_refptr<Segment> segment = open_segment();
         if (FLAGS_raft_trace_append_entry_latency && metric) {
             delta_time_us = butil::cpuwide_time_us() - now;
@@ -782,7 +782,7 @@ int SegmentLogStorage::append_entries(const std::vector<LogEntry*>& entries, IOM
     if (FLAGS_raft_trace_append_entry_latency && metric) {
         delta_time_us = butil::cpuwide_time_us() - now;
         metric->sync_segment_time_us += delta_time_us;
-        g_sync_segment_latency << delta_time_us; 
+        g_sync_segment_latency << delta_time_us;
     }
     return entries.size();
 }
@@ -851,16 +851,17 @@ void SegmentLogStorage::pop_segments(
     }
 }
 
+//  first_index_kept _first_log_index
 int SegmentLogStorage::truncate_prefix(const int64_t first_index_kept) {
     // segment files
     if (_first_log_index.load(butil::memory_order_acquire) >= first_index_kept) {
-      BRAFT_VLOG << "Nothing is going to happen since _first_log_index=" 
+      BRAFT_VLOG << "Nothing is going to happen since _first_log_index="
                      << _first_log_index.load(butil::memory_order_relaxed)
                      << " >= first_index_kept="
                      << first_index_kept;
         return 0;
     }
-    // NOTE: truncate_prefix is not important, as it has nothing to do with 
+    // NOTE: truncate_prefix is not important, as it has nothing to do with
     // consensus. We try to save meta on the disk first to make sure even if
     // the deleting fails or the process crashes (which is unlikely to happen).
     // The new process would see the latest `first_log_index'
@@ -894,7 +895,7 @@ void SegmentLogStorage::pop_segments_from_back(
         popped->push_back(_open_segment);
         _open_segment = NULL;
     }
-    for (SegmentMap::reverse_iterator 
+    for (SegmentMap::reverse_iterator
             it = _segments.rbegin(); it != _segments.rend(); ++it) {
         if (it->second->first_index() <= last_index_kept) {
             // Not return as we need to maintain _segments at the end of this
@@ -972,7 +973,7 @@ int SegmentLogStorage::reset(const int64_t next_log_index) {
     std::vector<scoped_refptr<Segment> > popped;
     std::unique_lock<raft_mutex_t> lck(_mutex);
     popped.reserve(_segments.size());
-    for (SegmentMap::const_iterator 
+    for (SegmentMap::const_iterator
             it = _segments.begin(); it != _segments.end(); ++it) {
         popped.push_back(it->second);
     }
@@ -1005,7 +1006,10 @@ int SegmentLogStorage::list_segments(bool is_empty) {
     }
 
     // restore segment meta
+    // 主要处理以下 3 类文件:
+    // 1. 临时文件
     while (dir_reader.Next()) {
+        // 删除 log_*.tmp 这类临时文件
         // unlink unneed segments and unfinished unlinked segments
         if ((is_empty && 0 == strncmp(dir_reader.name(), "log_", strlen("log_"))) ||
             (0 == strncmp(dir_reader.name() + (strlen(dir_reader.name()) - strlen(".tmp")),
@@ -1023,7 +1027,7 @@ int SegmentLogStorage::list_segments(bool is_empty) {
         int match = 0;
         int64_t first_index = 0;
         int64_t last_index = 0;
-        match = sscanf(dir_reader.name(), BRAFT_SEGMENT_CLOSED_PATTERN, 
+        match = sscanf(dir_reader.name(), BRAFT_SEGMENT_CLOSED_PATTERN,  // log_%020ld_%020ld
                        &first_index, &last_index);
         if (match == 2) {
             LOG(INFO) << "restore closed segment, path: " << _path
@@ -1034,7 +1038,7 @@ int SegmentLogStorage::list_segments(bool is_empty) {
             continue;
         }
 
-        match = sscanf(dir_reader.name(), BRAFT_SEGMENT_OPEN_PATTERN, 
+        match = sscanf(dir_reader.name(), BRAFT_SEGMENT_OPEN_PATTERN,  // "log_inprogress_%020ld"
                        &first_index);
         if (match == 1) {
             BRAFT_VLOG << "restore open segment, path: " << _path
@@ -1067,7 +1071,7 @@ int SegmentLogStorage::list_segments(bool is_empty) {
                 << " last_log_index: " << last_log_index;
             return -1;
         } else if (last_log_index == -1 &&
-                    _first_log_index.load(butil::memory_order_acquire) 
+                    _first_log_index.load(butil::memory_order_acquire)
                     < segment->first_index()) {
             LOG(WARNING) << "closed segment has hole, path: " << _path
                 << " first_log_index: " << _first_log_index.load(butil::memory_order_relaxed)
@@ -1118,7 +1122,7 @@ int SegmentLogStorage::load_segments(ConfigurationManager* configuration_manager
         ret = segment->load(configuration_manager);
         if (ret != 0) {
             return ret;
-        } 
+        }
         _last_log_index.store(segment->last_index(), butil::memory_order_release);
     }
 
@@ -1138,7 +1142,7 @@ int SegmentLogStorage::load_segments(ConfigurationManager* configuration_manager
             _open_segment->unlink();
             _open_segment = NULL;
         } else {
-            _last_log_index.store(_open_segment->last_index(), 
+            _last_log_index.store(_open_segment->last_index(),
                                  butil::memory_order_release);
         }
     }
@@ -1291,7 +1295,7 @@ butil::Status SegmentLogStorage::gc_instance(const std::string& uri) const {
     butil::Status status;
     if (gc_dir(uri) != 0) {
         LOG(WARNING) << "Failed to gc log storage from path " << _path;
-        status.set_error(EINVAL, "Failed to gc log storage from path %s", 
+        status.set_error(EINVAL, "Failed to gc log storage from path %s",
                          uri.c_str());
         return status;
     }
