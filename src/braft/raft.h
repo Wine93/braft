@@ -358,13 +358,14 @@ inline std::ostream& operator<<(std::ostream& os, const UserLog& user_log) {
 // Status of a peer
 struct PeerStatus {
     PeerStatus()
-        : valid(false), installing_snapshot(false), next_index(0)
+        : valid(false), installing_snapshot(false), blocking(false), next_index(0)
         , last_rpc_send_timestamp(0), flying_append_entries_size(0)
         , readonly_index(0), consecutive_error_times(0)
     {}
 
     bool    valid;
     bool    installing_snapshot;
+    bool    blocking;
     int64_t next_index;
     int64_t last_rpc_send_timestamp;
     int64_t flying_append_entries_size;
@@ -394,7 +395,7 @@ struct NodeStatus {
     // If the value is 0, means no pending logs.
     // 
     // WARNING: if this value is not 0, and keep the same in a long time,
-    // means something happend to prevent the node to commit logs in a
+    // means something happened to prevent the node to commit logs in a
     // large probability, and users should check carefully to find out
     // the reasons.
     int64_t pending_index;
@@ -409,7 +410,7 @@ struct NodeStatus {
     // The current applying index. If the value is 0, means no applying log.
     //
     // WARNING: if this value is not 0, and keep the same in a long time, means
-    // the apply thread hung, users should check if a deadlock happend, or some
+    // the apply thread hung, users should check if a deadlock happened, or some
     // time-consuming operations is handling in place.
     int64_t applying_index;
 
@@ -463,7 +464,7 @@ struct LeaderLeaseStatus {
 
     LeaseState state;
 
-    // These followering fields are only meaningful when |state == LEASE_VALID|.
+    // These following fields are only meaningful when |state == LEASE_VALID|.
     
     // The term of this lease
     int64_t term;
@@ -526,7 +527,7 @@ struct NodeOptions {
     // Default: false
     bool node_owns_fsm;
 
-    // The specific LogStorage implemented at the bussiness layer, which should be a valid
+    // The specific LogStorage implemented at the business layer, which should be a valid
     // instance, otherwise use SegmentLogStorage by default.
     //
     // Default: null
@@ -588,6 +589,20 @@ struct NodeOptions {
     // Default: false
     bool disable_cli;
 
+    // If true, this node is a witness.
+    // 1. FLAGS_raft_enable_witness_to_leader = false
+    //     It will never be elected as leader. So we don't need to init _vote_timer and _election_timer.
+    // 2. FLAGS_raft_enable_witness_to_leader = true
+    //     It can be electd as leader, but should transfer leader to normal replica as soon as possible.
+    // 
+    // Warning: 
+    // 1. FLAGS_raft_enable_witness_to_leader = false
+    //     When leader down and witness had newer log entry, it may cause leader election fail.
+    // 2. FLAGS_raft_enable_witness_to_leader = true
+    //     When leader shutdown and witness was elected as leader, if follower delay over one snapshot,
+    //     it may cause data lost because witness had truncated log entry before snapshot.
+    // Default: false
+    bool witness = false;
     // Construct a default instance
     NodeOptions();
 
@@ -632,7 +647,7 @@ public:
 
     // Return true if this is the leader, and leader lease is valid. It's always
     // false when |raft_enable_leader_lease == false|.
-    // In the follwing situations, the returned true is unbeleivable:
+    // In the following situations, the returned true is unbeleivable:
     //    -  Not all nodes in the raft group set |raft_enable_leader_lease| to true,
     //       and tranfer leader/vote interfaces are used;
     //    -  In the raft group, the value of |election_timeout_ms| in one node is larger

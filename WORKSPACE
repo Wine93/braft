@@ -53,8 +53,9 @@ http_archive(
 
 http_archive(
     name = "com_github_brpc_brpc",
-    strip_prefix = "incubator-brpc-2b748f82c3447196c8ce372733e5af8f8d76cef5",
-    url = "https://github.com/apache/incubator-brpc/archive/2b748f82c3447196c8ce372733e5af8f8d76cef5.tar.gz",
+    sha256 = "58a06997ae07c1654979fb8356884481ab9803b60de04c1b341d986e2b62220d",
+    strip_prefix = "brpc-1.1.0",
+    url = "https://github.com/apache/incubator-brpc/archive/refs/tags/1.1.0.tar.gz"
 )
 
 bind(
@@ -65,4 +66,21 @@ bind(
 bind(
     name = "butil",
     actual = "@com_github_brpc_brpc//:butil",
+)
+
+new_local_repository(
+    name = "openssl",
+    path = "/usr",
+    build_file = "//:openssl.BUILD",
+)
+
+bind(
+    name = "ssl",
+    actual = "@openssl//:ssl"
+)
+
+new_local_repository(
+    name = "zlib",
+    build_file = "//:zlib.BUILD",
+    path = "/usr",
 )
