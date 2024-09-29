@@ -1,11 +1,11 @@
 // Copyright (c) 2018 Baidu.com, Inc. All Rights Reserved
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -31,7 +31,7 @@ DEFINE_bool(allow_absent_key, false, "Cas succeeds if the key is absent while "
 DEFINE_bool(check_term, true, "Check if the leader changed to another term");
 DEFINE_bool(disable_cli, false, "Don't allow raft_cli access this node");
 DEFINE_bool(log_applied_task, false, "Print notice log when a task is applied");
-DEFINE_int32(election_timeout_ms, 5000, 
+DEFINE_int32(election_timeout_ms, 5000,
             "Start election in such milliseconds if disconnect with the leader");
 DEFINE_int32(map_capacity, 1024, "Initial capicity of value map");
 DEFINE_int32(port, 8100, "Listen port of this peer");
@@ -159,7 +159,7 @@ friend class AtomicClosure;
         // peers in the group receive this request as well.
         // Notice that _value can't be modified in this routine otherwise it
         // will be inconsistent with others in this group.
-        
+
         // Serialize request to IOBuf
         const int64_t term = _leader_term.load(butil::memory_order_relaxed);
         if (term < 0) {
@@ -200,7 +200,7 @@ friend class AtomicClosure;
 
     // @braft::StateMachine
     void on_apply(braft::Iterator& iter) {
-        // A batch of tasks are committed, which must be processed through 
+        // A batch of tasks are committed, which must be processed through
         // |iter|
         for (; iter.valid(); iter.next()) {
             // This guard helps invoke iter.done()->Run() asynchronously to
@@ -244,8 +244,8 @@ friend class AtomicClosure;
             // The purpose of following logs is to help you understand the way
             // this StateMachine works.
             // Remove these logs in performance-sensitive servers.
-            LOG_IF(INFO, FLAGS_log_applied_task) 
-                    << "Handled operation " << op 
+            LOG_IF(INFO, FLAGS_log_applied_task)
+                    << "Handled operation " << op
                     << " on id=" << response->id()
                     << " at log_index=" << iter.index()
                     << " success=" << response->success()
@@ -263,7 +263,7 @@ friend class AtomicClosure;
         sc->values.reserve(_value_map.size());
         sc->writer = writer;
         sc->done = done;
-        for (ValueMap::const_iterator 
+        for (ValueMap::const_iterator
                 it = _value_map.begin(); it != _value_map.end(); ++it) {
             sc->values.push_back(std::make_pair(it->first, it->second));
         }
@@ -313,7 +313,7 @@ friend class AtomicClosure;
     }
 
     // end of @braft::StateMachine
-    
+
     void get_value(const butil::IOBuf& data,
                    const google::protobuf::Message* request,
                    AtomicResponse* response) {
@@ -476,7 +476,7 @@ int main(int argc, char* argv[]) {
     example::AtomicServiceImpl service(&atomic);
 
     // Add your service into RPC rerver
-    if (server.AddService(&service, 
+    if (server.AddService(&service,
                           brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
         LOG(ERROR) << "Fail to add service";
         return -1;
